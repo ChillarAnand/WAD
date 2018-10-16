@@ -23,48 +23,49 @@ class Detector(object):
     def __init__(self):
         self.apps, self.categories = Clues.get_clues()
 
-    def detect(self, url, limit=None, exclude=None, timeout=TIMEOUT):
+    def detect(self, url=None, limit=None, exclude=None, timeout=TIMEOUT, content=None, headers=None):
         logging.info("- %s", url)
 
         findings = []
         original_url = url
 
-        if not self.expected_url(url, limit, exclude):
-            return {}
-
-        page = self.get_page(url=url, timeout=timeout)
-        if not page:
-            return {}
-
-        url = self.get_new_url(page)
-
-        if url != original_url:
-            logging.info("` %s", url)
-
+        if not content:
             if not self.expected_url(url, limit, exclude):
                 return {}
 
-        url = self.normalize_url(url)
+            page = self.get_page(url=url, timeout=timeout)
+            if not page:
+                return {}
 
-        content = self.get_content(page, url)
-        if content is None:  # Empty content is empty string, so it will pass.
-            return {}
+            url = self.get_new_url(page)
 
-        if six.PY3:
-            content = content.decode()
+            if url != original_url:
+                logging.info("` %s", url)
 
-        findings += self.check_url(url)  # 'url'
-        if page:
-            findings += self.check_headers(page.info())  # 'headers'
-        if content:
-            findings += self.check_meta(content)  # 'meta'
-            findings += self.check_script(content)  # 'script'
-            findings += self.check_html(content)  # 'html'
-        findings += self.additional_checks(page, url, content)
+                if not self.expected_url(url, limit, exclude):
+                    return {}
 
-        self.follow_implies(findings)  # 'implies'
+            url = self.normalize_url(url)
+
+            content = self.get_content(page, url)
+            if content is None:  # Empty content is empty string, so it will pass.
+                return {}
+
+            if six.PY3:
+                content = content.decode()
+            headers = page.info()
+            # print(content)
+            # print(headers)
+
+        # findings += self.check_url(url)  # 'url'
+        findings += self.check_headers(headers)
+        findings += self.check_meta(content)
+        findings += self.check_script(content)
+        findings += self.check_html(content)
+
+        self.follow_implies(findings)
         self.remove_duplicates(findings)
-        self.remove_exclusions(findings)  # 'excludes'
+        self.remove_exclusions(findings)
         self.add_categories(findings)
 
         return {url: findings}
@@ -175,6 +176,7 @@ class Detector(object):
     def check_script(self, content):
         found = []
         for tag in re_script.finditer(content):
+            # print(tag)
             found.extend(self.check_tag(data=tag.group(1), key='script', key_re='script_re', show_match_only=False))
         return found
 
